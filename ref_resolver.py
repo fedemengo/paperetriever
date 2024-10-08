@@ -8,6 +8,8 @@ import base64
 
 from scihub_dl import download_paper
 
+REF_DIR = "./refs/"
+
 def doi_to_filename(doi):
     # Use base64 encoding to ensure reversibility
     encoded_doi = base64.urlsafe_b64encode(doi.encode()).decode()
@@ -107,15 +109,24 @@ def get_first_author(authors_str):
 
 def retrieve_paper(ref):
     doi = ref.get('DOI')
+    title = ref.get('title')
     year = ref.get('year')
     fauthor = get_first_author(ref.get('authors'))
 
     search_term = doi
     if doi is None:
-        search_term = ref.get('title')
+        search_term = title
+
+    filename = f"{fauthor}_{year}"
+    if len(fauthor) < 2 or year is None:
+        filename = title
+
+    if len(filename) < 5:
+        print("Not enough information to create file", ref)
+        return
 
     try:
-        download_paper(search_term, "./data/", f"{fauthor}_{year}.pdf")
+        download_paper(search_term, REF_DIR, filename + ".pdf")
     except:
         print(ref)
 
@@ -125,6 +136,7 @@ article_title = sys.argv[1]
 references, doi = get_references_from_title(article_title)
 
 if doi:
+    os.makedirs(REF_DIR, exist_ok=True)
     filename = doi_to_filename(doi)
     recovered_doi = filename_to_doi(filename)
 
