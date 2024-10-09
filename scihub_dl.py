@@ -7,15 +7,20 @@ import requests
 import os
 import glob
 import urllib.parse
+from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
-SCIHUB_URL = "https://sci-hub.ru"
+SCIHUB_URL_ENV = os.getenv("SCIHUB_URL")
+
+SCIHUB_URL = "https://sci-hub.ru" if SCIHUB_URL_ENV is None else SCIHUB_URL_ENV
 NOT_FOUND_KEEP_PREFIX = "404."
+
+print(f"using scihub url {SCIHUB_URL}")
 
 def download_paper(title, folder, filename):
     full_path = os.path.join(folder, filename)
     if os.path.exists(full_path):
-        print(f"file already exists: {full_path}")
+        print(f"\tfile already exists: {full_path}")
         return
 
     encoded_title = title
@@ -41,10 +46,12 @@ def download_paper(title, folder, filename):
         headers, _, _ = result.stdout.partition('\r\n\r\n')
         headers_dict = dict(line.split(': ', 1) for line in headers.splitlines() if ': ' in line)
 
-        location = headers_dict.get('location')
+        location = urljoin(SCIHUB_URL, headers_dict.get('location'))
         if location:
-            print(f"get pdf embedding page from url={location}")
+            print(f"\tget pdf embedding page from url={location}")
             response = requests.get(location)
+            if response.status_code != 200:
+                raise ValueError(f"retrieving PDF embed page returned {response.status_code}")
             soup = BeautifulSoup(response.text, 'html.parser')
             pdf_embed = soup.find('embed', {'type': 'application/pdf'})
 
@@ -54,7 +61,7 @@ def download_paper(title, folder, filename):
                     pdf_url = 'https:' + pdf_url
                 pdf_url += '?download=true'
 
-                print(f"downloading from url={pdf_url}")
+                print(f"\tdownloading from url={pdf_url}")
                 paper_response = requests.get(pdf_url)
                 if paper_response.status_code == 200:
                     with open(full_path, 'wb') as f:
@@ -63,11 +70,12 @@ def download_paper(title, folder, filename):
                 else:
                     raise ValueError(f"failed to download PDF for: {title}")
             else:
-                raise ValueError(f"no PDF link found for: {title}")
+                raise ValueError(f"no PDF embed found for: {title}")
         else:
             raise ValueError(f"no Location header found for: {title}")
-    except:  # noqa
-        print("404 for", title)
+    except Exception as e:  # noqa
+        print("\t404 for", title)
+        print("\t", e)
         with open(os.path.join(folder, NOT_FOUND_KEEP_PREFIX + filename + ".txt"), 'w') as f:
             f.write(title)
             f.close()
