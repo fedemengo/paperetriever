@@ -1,24 +1,58 @@
 #!/usr/bin/env python
 
 import os
+import re
 import sys
 import requests
 import json
 import base64
 
-from scihub_dl import download_paper
+from scihub_dl import download_paper, prepare_folder
 
 REF_DIR = "./refs/"
 
-def doi_to_filename(doi):
-    # Use base64 encoding to ensure reversibility
-    encoded_doi = base64.urlsafe_b64encode(doi.encode()).decode()
-    return f"{encoded_doi}.json"
+REPLACEMENTS = [
+    ('/', '_sl_'),
+    ('-', '_hy_'),
+    (':', '_co_'),
+    (';', '_sc_'),
+    ('(', '_po_'),
+    (')', '_pc_'),
+    ('<', '_lt_'),
+    ('>', '_gt_'),
+    ('.', '_dt_'),
+    ('_', '_un_'),
+]
 
-def filename_to_doi(filename):
-    # Remove the .json extension and decode the base64
-    encoded_doi = filename.rsplit('.', 1)[0]
-    return base64.urlsafe_b64decode(encoded_doi).decode()
+# Create dictionaries for faster lookups
+ENCODE_DICT = dict(REPLACEMENTS)
+DECODE_DICT = {v: k for k, v in REPLACEMENTS}
+
+# Compile regex patterns once for efficiency
+ENCODE_PATTERN = re.compile('|'.join(map(re.escape, ENCODE_DICT.keys())))
+DECODE_PATTERN = re.compile('|'.join(map(re.escape, DECODE_DICT.keys())))
+
+def doi_to_filename(doi, ext='.json'):
+    # Remove 'doi:' or 'https://doi.org/' if present
+    doi = re.sub(r'^(doi:|https?://doi\.org/)', '', doi, flags=re.IGNORECASE)
+
+    # Apply replacements
+    encoded = ENCODE_PATTERN.sub(lambda m: ENCODE_DICT[m.group(0)], doi)
+
+    # Add .json extension
+    return f"{encoded}{ext}"
+
+def filename_to_doi(filename, ext='.json'):
+    # Check if filename has .json extension
+    name, ext = os.path.splitext(filename)
+    if ext.lower() != ext:
+        raise ValueError("Invalid filename format: must have .json extension")
+
+    # Apply reverse replacements
+    decoded = DECODE_PATTERN.sub(lambda m: DECODE_DICT[m.group(0)], name)
+
+    return decoded
+
 
 def get_doi_from_title(title):
     base_url = "https://api.crossref.org/works"
@@ -62,7 +96,9 @@ def get_references_from_doi(doi):
             references = data['message']['reference']
 
             ref_list = []
-            for ref in references:
+            for i in range(len(references)):
+                ref_index = i + 1
+                ref = references[i]
                 ref_info = {}
                 if 'DOI' in ref:
                     ref_info['DOI'] = ref['DOI']
@@ -72,6 +108,8 @@ def get_references_from_doi(doi):
                     ref_info['title'] = title
                 if 'year' in ref:
                     ref_info['year'] = ref['year']
+                if ref_info:
+                    ref_info['ref_idx'] = ref_index
 
                 if ref_info:
                     ref_list.append(ref_info)
@@ -92,7 +130,7 @@ def get_references_from_title(title):
         if os.path.exists(filename):
             with open(filename, 'r') as file:
                 data = json.load(file)
-        return data, doi
+                return data, doi
 
         references = get_references_from_doi(doi)
 
@@ -108,6 +146,7 @@ def get_first_author(authors_str):
     return authors_str.split(' ')[0].strip()
 
 def retrieve_paper(ref):
+    ref_index = ref['ref_idx']
     doi = ref.get('DOI')
     title = ref.get('title')
     year = ref.get('year')
@@ -121,9 +160,14 @@ def retrieve_paper(ref):
     if len(fauthor) < 2 or year is None:
         filename = title
 
+    if len(filename) < 5 and doi is not None:
+        filename = doi_to_filename(doi, ext='')
+
     if len(filename) < 5:
         print("Not enough information to create file", ref)
         return
+
+    filename = f"{ref_index}_{filename}"
 
     try:
         download_paper(search_term, REF_DIR, filename + ".pdf")
@@ -141,6 +185,7 @@ if doi:
     recovered_doi = filename_to_doi(filename)
 
     print(f"References for article '{article_title}' (DOI: {doi}):")
+    prepare_folder(REF_DIR)
     for i, ref in enumerate(references, 1):
         print(f"{i}. DOI: {ref.get('DOI', 'N/A')}, Author: {ref.get('author', 'N/A')}, Title: {ref.get('title', 'N/A')}")
         retrieve_paper(ref)
