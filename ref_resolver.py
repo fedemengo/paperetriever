@@ -5,7 +5,6 @@ import re
 import sys
 import requests
 import json
-import base64
 
 from scihub_dl import download_paper, prepare_folder
 
@@ -147,10 +146,10 @@ def get_first_author(authors_str):
 
 def retrieve_paper(ref):
     ref_index = ref['ref_idx']
-    doi = ref.get('DOI')
-    title = ref.get('title')
-    year = ref.get('year')
-    fauthor = get_first_author(ref.get('authors'))
+    doi = ref.get('DOI', "")
+    title = ref.get('title', "")
+    year = ref.get('year', "")
+    fauthor = get_first_author(ref.get('authors', ""))
 
     search_term = doi
     if doi is None:

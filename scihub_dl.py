@@ -102,12 +102,13 @@ def main():
         print("Usage: python script.py csv_file1.csv csv_file2.csv ...")
         sys.exit(1)
 
-    for csv_filename in sys.argv[1:]:
-        if not os.path.exists(csv_filename):
-            print(f"file not found: {csv_filename}")
-            continue
-        print(f"processing {csv_filename}...")
-        process_csv(csv_filename)
+    for csv_file_or_ref in sys.argv[1:]:
+        if os.path.exists(csv_file_or_ref):
+            print(f"processing {csv_file_or_ref}...")
+            process_csv(csv_file_or_ref)
+        else:
+            print(f"processing {csv_file_or_ref} as ref...")
+            download_paper(csv_file_or_ref, "./", csv_file_or_ref)
 
 
 if __name__ == "__main__":
