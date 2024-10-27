@@ -4,12 +4,23 @@ This project helps manage academic references, allowing users to download papers
 
 ## Installation
 
-Instructions for installation...
+```
+git clone git@github.com:fedemengo/paperetriever.git && cd paperetriever
+pip install -e .
+```
+
 
 ## Usage
 
-Examples of how to use the CLI...
+Download article
 
-## License
+```
+> paperetriever download "ref-here" -o ./test_papers
+```
 
-Details about the license...
+Download refs for an articles
+
+```
+> paperetriever resolve-references "ref-here" -o ./test_refs --download-refs
+```
+
